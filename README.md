@@ -1,15 +1,15 @@
 Для запуска на Windows:
 
-javac SimpleChatServer.java
+```javac SimpleChatServer.java```
 
-java SimpleChatServer
+```java SimpleChatServer```
 
-Во втором окне запустить telnet (Для включения telnet необходимо ввести в Пуск "Включение или отключение компонентов Windows" и выбрать "Клиент Telnet"):
+Во втором окне запустить `telnet` (Для включения `telnet` необходимо ввести в Пуск "Включение или отключение компонентов Windows" и выбрать "Клиент Telnet"):
 
-telnet localhost 12345
+```telnet localhost 12345```
 
 Архитектура проекта:
-D:.
+```D:.
 |   pom.xml
 |   SimpleChatServer.java
 |
@@ -34,3 +34,4 @@ D:.
         |           LoadTest.java
         |
         \---resources
+```
