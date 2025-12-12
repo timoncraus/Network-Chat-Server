@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 public class AnalyticsBot {
     private final StatsCalculator statsCalculator;
     private final BlockingQueue<ChatMessage> analyticsQueue;
+    private final CommandProcessor commandProcessor; 
     private final MessageBroker messageBroker;
     private final ScheduledExecutorService scheduler;
     private volatile boolean isRunning;
@@ -17,7 +18,7 @@ public class AnalyticsBot {
         this.messageBroker = messageBroker;
         this.scheduler = Executors.newScheduledThreadPool(2);
         this.isRunning = true;
-        private final CommandProcessor commandProcessor;
+        this.commandProcessor = new CommandProcessor(statsCalculator, messageBroker);  // ИНИЦИАЛИЗАЦИЯ
     }
 
     public void start() {
