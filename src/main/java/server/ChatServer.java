@@ -1,4 +1,5 @@
-import common.ChatMessage;
+package server;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -6,6 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import common.ChatMessage;
 
 public class ChatServer {
     private final int port;
@@ -23,21 +26,22 @@ public class ChatServer {
     }
 
     public void start() {
-        System.out.println("Запуск чат-сервера на порту " + port);
+        Logger.info("Запуск чат-сервера на порту " + port);
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             // Запускаем поток для MessageBroker
             new Thread(messageBroker, "MessageBroker-Thread").start();
+            Logger.info("MessageBroker запущен");
 
             while (isRunning) {
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("Новое подключение: " + clientSocket.getInetAddress());
+                Logger.info("Новое подключение: " + clientSocket.getInetAddress());
                 
                 // Создаем обработчик клиента
                 ClientHandler clientHandler = new ClientHandler(clientSocket, this);
                 clientThreadPool.execute(clientHandler);
             }
         } catch (IOException e) {
-            System.err.println("Ошибка сервера: " + e.getMessage());
+            Logger.error("Ошибка сервера: " + e.getMessage(), e);
         } finally {
             shutdown();
         }
@@ -47,15 +51,14 @@ public class ChatServer {
     public void registerClient(String username, ClientHandler handler) {
         connectedClients.put(username, handler);
         broadcastSystemMessage(username + " присоединился к чату.");
-        System.out.println("Зарегистрирован пользователь: " + username);
-        System.out.println("Активных пользователей: " + connectedClients.size());
+        Logger.info("Зарегистрирован пользователь: " + username + ", активных пользователей: " + connectedClients.size());
     }
 
     // Удаление клиента
     public void removeClient(String username) {
         if (connectedClients.remove(username) != null) {
             broadcastSystemMessage(username + " покинул чат.");
-            System.out.println("Пользователь отключен: " + username);
+            Logger.info("Пользователь отключен: " + username + ", активных пользователей: " + connectedClients.size());
         }
     }
 
@@ -80,6 +83,10 @@ public class ChatServer {
     public String[] getActiveUsers() {
         return connectedClients.keySet().toArray(new String[0]);
     }
+    
+    public int getActiveUserCount() {
+        return connectedClients.size();
+    }
 
     // Для MessageBroker
     public MessageBroker getMessageBroker() {
@@ -91,7 +98,7 @@ public class ChatServer {
         if (!isRunning) return;
         isRunning = false;
         
-        System.out.println("Завершение работы сервера...");
+        Logger.info("Завершение работы сервера...");
         
         // Отключаем всех клиентов
         for (ClientHandler client : connectedClients.values()) {
@@ -105,11 +112,12 @@ public class ChatServer {
             }
         } catch (InterruptedException e) {
             clientThreadPool.shutdownNow();
+            Thread.currentThread().interrupt();
         }
         
         messageBroker.shutdown(); // Останавливаем брокер
         
-        System.out.println("Сервер остановлен.");
+        Logger.info("Сервер остановлен.");
     }
 
     public static void main(String[] args) {

@@ -1,27 +1,28 @@
-import common.ChatMessage;
-import java.util.concurrent.BlockingQueue;
+package server;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import common.ChatMessage;
+
 public class AnalyticsBot {
     private final StatsCalculator statsCalculator;
-    private final BlockingQueue<ChatMessage> analyticsQueue;
     private final MessageBroker messageBroker;
     private final ScheduledExecutorService scheduler;
+    private final CommandProcessor commandProcessor;
     private volatile boolean isRunning;
 
     public AnalyticsBot(MessageBroker messageBroker) {
         this.statsCalculator = new StatsCalculator();
-        this.analyticsQueue = messageBroker.getAnalyticsQueue(); // Нужно добавить геттер в MessageBroker
         this.messageBroker = messageBroker;
         this.scheduler = Executors.newScheduledThreadPool(2);
         this.isRunning = true;
-        private final CommandProcessor commandProcessor;
+        this.commandProcessor = new CommandProcessor(statsCalculator, messageBroker);
     }
 
     public void start() {
-        System.out.println("AnalyticsBot запущен");
+        Logger.info("AnalyticsBot запущен");
         
         // Поток для обработки сообщений из очереди
         new Thread(this::processMessages, "AnalyticsBot-Processor").start();
@@ -36,7 +37,7 @@ public class AnalyticsBot {
     private void processMessages() {
         while (isRunning) {
             try {
-                ChatMessage message = analyticsQueue.poll(100, TimeUnit.MILLISECONDS);
+                ChatMessage message = messageBroker.getAnalyticsQueue().poll(100, TimeUnit.MILLISECONDS);
                 if (message == null) continue;
 
                 // Обработка в зависимости от типа сообщения
@@ -46,16 +47,20 @@ public class AnalyticsBot {
                         break;
                         
                     case COMMAND:
-                        // Команды будут обрабатываться CommandProcessor
-                        // Здесь просто логируем
-                        System.out.println("[Бот] Получена команда от " + 
-                            message.getUser() + ": " + message.getText());
+                        // Команды обрабатываются CommandProcessor
+                        commandProcessor.processCommand(message);
+                        break;
+                        
+                    default:
+                        Logger.warn("Получено сообщение неизвестного типа: " + message.getType());
                         break;
                 }
                 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
+            } catch (Exception e) {
+                Logger.error("Ошибка при обработке сообщения в AnalyticsBot", e);
             }
         }
     }

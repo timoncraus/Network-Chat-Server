@@ -1,9 +1,12 @@
-import common.ChatMessage;
+package server;
+
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
+import common.ChatMessage;
 
 public class MessageBroker implements Runnable {
     private final ChatServer server;
@@ -26,7 +29,7 @@ public class MessageBroker implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("MessageBroker запущен");
+        Logger.info("MessageBroker запущен");
         
         // Запускаем потоки-обработчики
         executor.execute(this::processIncomingMessages);
@@ -77,6 +80,8 @@ public class MessageBroker implements Runnable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
+            } catch (Exception e) {
+                System.err.println("Ошибка при маршрутизации сообщения: " + e.getMessage());
             }
         }
     }
@@ -96,6 +101,28 @@ public class MessageBroker implements Runnable {
             }
         }
     }
+    
+    // Метод для получения статистики по очередям
+    public QueueStats getQueueStats() {
+        return new QueueStats(
+            incomingQueue.size(),
+            outgoingQueue.size(),
+            analyticsQueue.size()
+        );
+    }
+    
+    // Класс для статистики по очередям
+    public static class QueueStats {
+        public final int incomingSize;
+        public final int outgoingSize;
+        public final int analyticsSize;
+        
+        public QueueStats(int incomingSize, int outgoingSize, int analyticsSize) {
+            this.incomingSize = incomingSize;
+            this.outgoingSize = outgoingSize;
+            this.analyticsSize = analyticsSize;
+        }
+    }
 
     // Поток для аналитики (Consumer для analyticsQueue)
     private void processAnalyticsMessages() {
@@ -106,7 +133,7 @@ public class MessageBroker implements Runnable {
                 
                 // Здесь будет вызываться AnalyticsBot
                 // Пока просто логируем
-                System.out.println("[Analytics Queue] Получено сообщение для анализа: " + message);
+                Logger.info("[Analytics Queue] Получено сообщение для анализа: " + message);
                 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -120,8 +147,8 @@ public class MessageBroker implements Runnable {
         while (isRunning) {
             try {
                 Thread.sleep(5000);
-                System.out.printf("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d%n",
-                    incomingQueue.size(), outgoingQueue.size(), analyticsQueue.size());
+                Logger.info(String.format("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d",
+                    incomingQueue.size(), outgoingQueue.size(), analyticsQueue.size()));
             } catch (InterruptedException e) {
                 break;
             }
@@ -151,6 +178,19 @@ public class MessageBroker implements Runnable {
         } catch (InterruptedException e) {
             executor.shutdownNow();
         }
-        System.out.println("MessageBroker остановлен");
+        Logger.info("MessageBroker остановлен");
+    }
+    
+    // Геттеры для доступа к очередям из других компонентов
+    public BlockingQueue<ChatMessage> getIncomingQueue() {
+        return incomingQueue;
+    }
+    
+    public BlockingQueue<ChatMessage> getOutgoingQueue() {
+        return outgoingQueue;
+    }
+    
+    public BlockingQueue<ChatMessage> getAnalyticsQueue() {
+        return analyticsQueue;
     }
 }
