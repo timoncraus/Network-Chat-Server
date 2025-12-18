@@ -1,213 +1,268 @@
 package server;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.BlockingQueue;
+import java.util.stream.Collectors;
 
 import common.ChatMessage;
 
 public class CommandProcessor {
     private final StatsCalculator statsCalculator;
     private final MessageBroker messageBroker;
+    private final Instant startTime;
+    private final Random random;
 
     public CommandProcessor(StatsCalculator statsCalculator, MessageBroker messageBroker) {
         this.statsCalculator = statsCalculator;
         this.messageBroker = messageBroker;
+        this.startTime = Instant.now();
+        this.random = new Random();
     }
 
     public void processCommand(ChatMessage message) {
-        // Валидация входных данных
-        if (message == null || message.getText() == null || message.getUser() == null) {
-            Logger.error("CommandProcessor", "Получено некорректное сообщение: " + message);
+        // Базовая валидация
+        if (message == null || message.getText() == null || !message.getText().startsWith("/")) {
             return;
         }
-        
-        String text = message.getText();
+
         String user = message.getUser();
+        String text = message.getText().trim();
         
-        // Проверка, начинается ли сообщение с команды
-        if (!text.startsWith("/")) {
-            Logger.warn("CommandProcessor", "Получено сообщение без слеша: " + text);
-            return;
-        }
-        
-        // Убираем слеш и разбиваем на команду и аргументы
+        // Разбиваем на команду и аргументы (максимум 2 части)
         String[] parts = text.substring(1).split("\\s+", 2);
         String command = parts[0].toLowerCase();
-        String args = parts.length > 1 ? parts[1] : "";
-        
-        // Валидация команды
-        if (command.isEmpty()) {
-            Logger.warn("CommandProcessor", "Получена пустая команда от пользователя " + user);
+        String args = parts.length > 1 ? parts[1].trim() : "";
+
+        // Защита от слишком длинных аргументов
+        if (args.length() > 200) {
+            sendResponse("⚠️ Аргументы слишком длинные.", user);
             return;
         }
-        
-        // Проверка длины аргументов
-        if (args.length() > 1000) {
-            Logger.warn("CommandProcessor", "Слишком длинные аргументы в команде от пользователя " + user + ", длина: " + args.length());
-            return;
-        }
-        
+
         String response;
-        
-        switch (command) {
-            case "stats":
-                response = handleStatsCommand(user, args);
-                break;
-                
-            case "top":
-                response = handleTopCommand(args);
-                break;
-                
-            case "users":
-                response = handleUsersCommand();
-                break;
-                
-            case "help":
-                response = handleHelpCommand();
-                break;
-                
-            case "time":
-                response = handleTimeCommand();
-                break;
-                
-            case "me":
-                response = handleMeCommand(user);
-                break;
-                
-            default:
-                response = "❌ Неизвестная команда. Введите /help для списка команд.";
-                break;
-        }
-        
-        // Отправляем ответ пользователю
-        ChatMessage botResponse = new ChatMessage(
-            ChatMessage.MessageType.STATISTICS,
-            "Бот",
-            response
-        );
-        
-        // Отправляем ответ пользователю через MessageBroker
+
         try {
-            messageBroker.getOutgoingQueue().put(botResponse);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            Logger.error("CommandProcessor", "Прервано прерыванием при отправке ответа на команду", e);
+            switch (command) {
+                // --- Статистика ---
+                case "stats":
+                case "s":
+                    response = handleStatsCommand(user, args);
+                    break;
+                case "top":
+                case "t":
+                    response = handleTopCommand();
+                    break;
+                case "users":
+                case "u":
+                case "online":
+                    response = handleUsersCommand();
+                    break;
+                case "me":
+                    response = handleStatsCommand(user, "");
+                    break;
+
+                // --- Утилиты ---
+                case "help":
+                case "h":
+                case "?":
+                    response = handleHelpCommand();
+                    break;
+                case "time":
+                    response = handleTimeCommand();
+                    break;
+                case "uptime":
+                    response = handleUptimeCommand();
+                    break;
+
+                // --- Развлечения ---
+                case "roll":
+                    response = handleRollCommand(user, args);
+                    break;
+                case "flip":
+                    response = handleFlipCommand(user);
+                    break;
+                case "8ball":
+                    response = handle8BallCommand(user, args);
+                    break;
+
+                default:
+                    response = "❌ Неизвестная команда. Введите /help";
+            }
+        } catch (Exception e) {
+            Logger.error("CommandProcessor", "Ошибка выполнения команды /" + command, e);
+            response = "⚠️ Внутренняя ошибка сервера при выполнении команды.";
         }
+
+        sendResponse(response, user);
     }
-    
+
+    // ================= МЕТОДЫ ОБРАБОТКИ КОМАНД =================
+
     private String handleStatsCommand(String requestingUser, String args) {
-        String targetUser = args.isEmpty() ? requestingUser : args.trim();
-        
-        Map<String, Long> userStats = statsCalculator.getUserMessageCounts();
-        
-        if (!userStats.containsKey(targetUser)) {
-            return "❌ Пользователь '" + targetUser + "' не найден или не отправлял сообщений.";
+        String targetUser = args.isEmpty() ? requestingUser : args;
+        Map<String, Long> stats = statsCalculator.getUserMessageCounts();
+
+        if (!stats.containsKey(targetUser)) {
+            return String.format("❌ Пользователь [%s] не найден или молчит.", targetUser);
         }
+
+        long userMsgs = stats.get(targetUser);
+        long totalMsgs = statsCalculator.getTotalMessages();
         
-        long messages = userStats.get(targetUser);
-        // Здесь можно добавить больше статистики из StatsCalculator
+        // Вычисляем процент от общего числа сообщений
+        double percentage = totalMsgs > 0 ? (double) userMsgs / totalMsgs * 100 : 0;
         
-        StringBuilder response = new StringBuilder();
-        response.append("📈 Статистика для ").append(targetUser).append(":\n");
-        response.append("  • Сообщений: ").append(messages).append("\n");
-        response.append("  • Активность: ");
-        
-        // Определяем уровень активности
-        if (messages > 100) {
-            response.append("🔥 Очень активный\n");
-        } else if (messages > 50) {
-            response.append("⭐ Активный\n");
-        } else if (messages > 10) {
-            response.append("👍 Средняя активность\n");
-        } else {
-            response.append("👶 Начинающий\n");
-        }
-        
-        response.append("  • Ранг: ").append(getUserRank(targetUser, userStats));
-        
-        return response.toString();
+        // Рисуем бар
+        String progressBar = drawProgressBar((int) percentage, 10);
+        String rank = determineRank(userMsgs);
+
+        return new StringBuilder()
+            .append("╔════════ СТАТИСТИКА ════════╗\n")
+            .append(String.format("║ 👤 Пользователь: %s\n", targetUser))
+            .append(String.format("║ ✉️ Сообщений:    %d\n", userMsgs))
+            .append(String.format("║ 🏆 Ранг:         %s\n", rank))
+            .append(String.format("║ 📊 Активность:   %s (%.1f%%)\n", progressBar, percentage))
+            .append("╚════════════════════════════╝")
+            .toString();
     }
-    
-    private String handleTopCommand(String args) {
-        Map<String, Integer> wordFreq = statsCalculator.getWordFrequency();
-        
-        if (wordFreq.isEmpty()) {
-            return "📊 Пока недостаточно данных для статистики слов.";
-        }
-        
-        StringBuilder response = new StringBuilder();
-        response.append("🔥 Топ-10 популярных слов:\n");
-        
-        StringBuilder responseWithRanks = new StringBuilder(response);
-        int[] rank = {1};
-        wordFreq.entrySet().stream()
-            .sorted((e1, e2) -> Integer.compare(e2.getValue(), e1.getValue()))
+
+    private String handleTopCommand() {
+        Map<String, Integer> words = statsCalculator.getWordFrequency();
+        if (words.isEmpty()) return "📊 Статистика слов пока пуста.";
+
+        List<Map.Entry<String, Integer>> top = words.entrySet().stream()
+            .sorted((e1, e2) -> e2.getValue().compareTo(e1.getValue()))
             .limit(10)
-            .forEach(entry -> {
-                responseWithRanks.append(String.format("  %d. \"%s\" - %d раз\n",
-                    rank[0]++, entry.getKey(), entry.getValue()));
-            });
-        response = responseWithRanks;
-        
-        return response.toString();
+            .collect(Collectors.toList());
+
+        int maxCount = top.get(0).getValue();
+        StringBuilder sb = new StringBuilder("🔥 ТОП-10 СЛОВ:\n");
+
+        int i = 1;
+        for (Map.Entry<String, Integer> entry : top) {
+            // Нормализуем длину бара относительно самого частого слова
+            int barPercent = (int) ((double) entry.getValue() / maxCount * 100);
+            String bar = drawProgressBar(barPercent, 8);
+            
+            sb.append(String.format("%2d. %-10s %s %d\n", 
+                i++, 
+                limitString(entry.getKey(), 10), 
+                bar, 
+                entry.getValue()));
+        }
+        return sb.toString();
     }
-    
+
     private String handleUsersCommand() {
-        Map<String, Long> userStats = statsCalculator.getUserMessageCounts();
-        int totalUsers = userStats.size();
-        long totalMessages = statsCalculator.getTotalMessages();
-        
-        StringBuilder response = new StringBuilder();
-        response.append("👥 Пользователи онлайн (").append(totalUsers).append("):\n");
-        
-        userStats.entrySet().stream()
-            .sorted((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()))
-            .forEach(entry -> {
-                String user = entry.getKey();
-                long messages = entry.getValue();
-                String indicator = messages > 50 ? "💬" : messages > 10 ? "🗨️" : "👤";
-                response.append(String.format("  %s %s: %d сообщений\n",
-                    indicator, user, messages));
+        Map<String, Long> stats = statsCalculator.getUserMessageCounts();
+        if (stats.isEmpty()) return "👥 Нет активных пользователей.";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("👥 АКТИВНЫЕ ПОЛЬЗОВАТЕЛИ (%d):\n", stats.size()));
+        sb.append("──────────────────────────────\n");
+
+        stats.entrySet().stream()
+            .sorted((e1, e2) -> e2.getValue().compareTo(e1.getValue()))
+            .limit(15) // Ограничиваем список
+            .forEach(e -> {
+                String icon = e.getValue() > 50 ? "👑" : (e.getValue() > 10 ? "⭐️" : "👤");
+                sb.append(String.format("%s %-15s : %d msg\n", icon, e.getKey(), e.getValue()));
             });
-        
-        response.append("\n📊 Всего сообщений в чате: ").append(totalMessages);
-        
-        return response.toString();
+
+        return sb.toString();
     }
-    
+
     private String handleHelpCommand() {
-        return "📋 Доступные команды:\n" +
-               "/help - показать это сообщение\n" +
-               "/stats [имя] - статистика пользователя\n" +
-               "/top - самые популярные слова\n" +
-               "/users - список активных пользователей\n" +
-               "/time - текущее время сервера\n" +
-               "/me - ваша личная статистика\n" +
-               "\n" +
-               "💡 Просто напишите сообщение без слеша, чтобы отправить его в чат.";
+        return "📋 ДОСТУПНЫЕ КОМАНДЫ:\n" +
+               "🔹 /stats [user] - Статистика (или /me)\n" +
+               "🔹 /top          - Топ слов чата\n" +
+               "🔹 /users        - Кто онлайн/активен\n" +
+               "🔹 /roll [max]   - Случайное число\n" +
+               "🔹 /flip         - Орел или решка\n" +
+               "🔹 /8ball [msg]  - Шар предсказаний\n" +
+               "🔹 /uptime       - Время работы сервера";
     }
-    
+
     private String handleTimeCommand() {
-        return "🕐 Текущее время сервера: " + 
-               java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+        return "🕒 Время на сервере: " + LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+    }
+
+    private String handleUptimeCommand() {
+        Duration d = Duration.between(startTime, Instant.now());
+        return String.format("⏳ Аптайм: %dд %02dч %02dм %02dс", 
+            d.toDays(), d.toHoursPart(), d.toMinutesPart(), d.toSecondsPart());
+    }
+
+    // --- Развлекательные команды ---
+
+    private String handleRollCommand(String user, String args) {
+        int max = 100;
+        try {
+            if (!args.isEmpty()) max = Math.abs(Integer.parseInt(args));
+        } catch (NumberFormatException ignored) {}
+        
+        if (max == 0) max = 100;
+        return String.format("🎲 %s бросил кубик (1-%d): [%d]", user, max, random.nextInt(max) + 1);
+    }
+
+    private String handleFlipCommand(String user) {
+        return String.format("🪙 %s подбросил монету: %s", user, random.nextBoolean() ? "ОРЕЛ" : "РЕШКА");
     }
     
-    private String handleMeCommand(String user) {
-        return handleStatsCommand(user, "");
+    private String handle8BallCommand(String user, String question) {
+        if (question.isEmpty()) return "🎱 Задай вопрос! Пример: /8ball Сдам ли я экзамен?";
+        String[] answers = {
+            "Бесспорно", "Предрешено", "Никаких сомнений", "Определенно да", 
+            "Пока не ясно, попробуй снова", "Спроси позже", "Лучше не рассказывать", 
+            "Даже не думай", "Мой ответ — нет", "Весьма сомнительно"
+        };
+        return String.format("🎱 Вопрос: %s\n✨ Ответ: %s", question, answers[random.nextInt(answers.length)]);
+    }
+
+    // ================= ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ =================
+
+    private void sendResponse(String text, String user) {
+        // Формируем системное сообщение с результатом
+        ChatMessage msg = new ChatMessage(ChatMessage.MessageType.STATISTICS, "Bot", text);
+        BlockingQueue<ChatMessage> queue = messageBroker.getOutgoingQueue();
+        
+        if (queue != null) {
+            // offer не блокирует поток, если очередь переполнена
+            if (!queue.offer(msg)) {
+                Logger.warn("CommandProcessor", "Очередь исходящих сообщений переполнена!");
+            }
+        }
+    }
+
+    private String drawProgressBar(int percentage, int length) {
+        int filledLength = (int) ((percentage / 100.0) * length);
+        if (filledLength > length) filledLength = length;
+        
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < length; i++) {
+            sb.append(i < filledLength ? "█" : "░");
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String determineRank(long msgCount) {
+        if (msgCount > 500) return "Легенда";
+        if (msgCount > 200) return "Магистр";
+        if (msgCount > 100) return "Профи";
+        if (msgCount > 50)  return "Активист";
+        if (msgCount > 10)  return "Участник";
+        return "Новичок";
     }
     
-    private String getUserRank(String user, Map<String, Long> userStats) {
-        long userMessages = userStats.getOrDefault(user, 0L);
-        long aboveCount = userStats.values().stream().filter(count -> count > userMessages).count();
-        
-        int totalUsers = userStats.size();
-        if (totalUsers == 0) return "Нет данных";
-        
-        int position = (int) aboveCount + 1;
-        int percentage = (int) ((double) position / totalUsers * 100);
-        
-        if (percentage <= 10) return "🥇 Топ-10%";
-        if (percentage <= 25) return "🥈 Топ-25%";
-        if (percentage <= 50) return "🥉 Топ-50%";
-        return "🎖️ Новичок";
+    private String limitString(String str, int len) {
+        if (str.length() <= len) return str;
+        return str.substring(0, len - 1) + "…";
     }
 }
