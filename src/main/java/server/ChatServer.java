@@ -31,7 +31,7 @@ public class ChatServer {
             // Запускаем поток для MessageBroker
             new Thread(messageBroker, "MessageBroker-Thread").start();
             Logger.info("MessageBroker запущен");
-
+ 
             while (isRunning) {
                 Socket clientSocket = serverSocket.accept();
                 Logger.info("Новое подключение: " + clientSocket.getInetAddress());
@@ -42,6 +42,8 @@ public class ChatServer {
             }
         } catch (IOException e) {
             Logger.error("Ошибка сервера: " + e.getMessage(), e);
+        } catch (Exception e) {
+            Logger.error("Неожиданная ошибка сервера: " + e.getMessage(), e);
         } finally {
             shutdown();
         }

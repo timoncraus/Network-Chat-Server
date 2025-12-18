@@ -28,26 +28,26 @@ public class PerformanceMonitor {
             } catch (Exception e) {
                 Logger.error("PerformanceMonitor", "Ошибка в PerformanceMonitor: " + e.getMessage(), e);
             }
-        }, 5, 5, TimeUnit.SECONDS);
+        }, 5, ServerConfig.getInstance().getMonitorIntervalSeconds(), TimeUnit.SECONDS);
     }
     
     private void printMetrics() {
         MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
         long uptime = System.currentTimeMillis() - startTime;
         
-        Logger.info("PerformanceMonitor", "=".repeat(60));
-        Logger.info("PerformanceMonitor", "МОНИТОРИНГ ПРОИЗВОДИТЕЛЬНОСТИ");
-        Logger.info("PerformanceMonitor", "=".repeat(60));
+        Logger.debug("PerformanceMonitor", "=".repeat(60));
+        Logger.debug("PerformanceMonitor", "МОНИТОРИНГ ПРОИЗВОДИТЕЛЬНОСТИ");
+        Logger.debug("PerformanceMonitor", "=".repeat(60));
         
-        Logger.info("PerformanceMonitor", String.format("Время работы: %s", formatUptime(uptime)));
+        Logger.debug("PerformanceMonitor", String.format("Время работы: %s", formatUptime(uptime)));
         
         // Активные подключения
-        Logger.info("PerformanceMonitor", String.format("Активные подключения: %d", server.getActiveUserCount()));
+        Logger.debug("PerformanceMonitor", String.format("Активные подключения: %d", server.getActiveUserCount()));
         
         // Использование памяти
         long usedMemory = memoryBean.getHeapMemoryUsage().getUsed() / (1024 * 1024);
         long maxMemory = memoryBean.getHeapMemoryUsage().getMax() / (1024 * 1024);
-        Logger.info("PerformanceMonitor", String.format("Память: %dMB / %dMB (%.1f%%)",
+        Logger.debug("PerformanceMonitor", String.format("Память: %dMB / %dMB (%.1f%%)",
             usedMemory, maxMemory, (usedMemory * 100.0 / maxMemory)));
         
         // Статистика потоков
@@ -55,21 +55,21 @@ public class PerformanceMonitor {
         while (rootGroup.getParent() != null) {
             rootGroup = rootGroup.getParent();
         }
-        Logger.info("PerformanceMonitor", String.format("Активные потоки: %d", rootGroup.activeCount()));
+        Logger.debug("PerformanceMonitor", String.format("Активные потоки: %d", rootGroup.activeCount()));
         
         // Загрузка CPU
-        Logger.info("PerformanceMonitor", String.format("Загрузка CPU: %.1f%%", getProcessCpuLoad()));
+        Logger.debug("PerformanceMonitor", String.format("Загрузка CPU: %.1f%%", getProcessCpuLoad()));
         
         // Статистика MessageBroker
         if (messageBroker != null) {
-            Logger.info("PerformanceMonitor", String.format("Очередь входящих: %d", messageBroker.getIncomingQueue().size()));
-            Logger.info("PerformanceMonitor", String.format("Очередь исходящих: %d", messageBroker.getOutgoingQueue().size()));
-            Logger.info("PerformanceMonitor", String.format("Очередь аналитики: %d", messageBroker.getAnalyticsQueue().size()));
+            Logger.debug("PerformanceMonitor", String.format("Очередь входящих: %d", messageBroker.getIncomingQueue().size()));
+            Logger.debug("PerformanceMonitor", String.format("Очередь исходящих: %d", messageBroker.getOutgoingQueue().size()));
+            Logger.debug("PerformanceMonitor", String.format("Очередь аналитики: %d", messageBroker.getAnalyticsQueue().size()));
         } else {
             Logger.warn("PerformanceMonitor", "MessageBroker недоступен для мониторинга");
         }
         
-        Logger.info("PerformanceMonitor", "=".repeat(60));
+        Logger.debug("PerformanceMonitor", "=".repeat(60));
     }
     
     private String formatUptime(long millis) {

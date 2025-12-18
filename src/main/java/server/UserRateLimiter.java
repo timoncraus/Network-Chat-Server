@@ -20,21 +20,25 @@ public class UserRateLimiter {
      * Проверяет, можно ли отправить сообщение
      * @return true если сообщение можно отправить, false если превышен лимит
      */
-    public synchronized boolean allowRequest() {
+    public boolean allowRequest() {
         long now = Instant.now().toEpochMilli();
         long minuteInMillis = 60_000; // одна минута в миллисекундах
         
         // Если прошло больше минуты с начала окна, сбрасываем счетчик
         if (now - windowStart.get() > minuteInMillis) {
+            // Используем атомарные операции для обновления значений
             windowStart.set(now);
             messageCount.set(1);
             return true;
         }
         
         // Проверяем, не превышен ли лимит
-        if (messageCount.get() < maxMessagesPerMinute) {
-            messageCount.incrementAndGet();
-            return true;
+        int currentCount = messageCount.get();
+        while (currentCount < maxMessagesPerMinute) {
+            if (messageCount.compareAndSet(currentCount, currentCount + 1)) {
+                return true;
+            }
+            currentCount = messageCount.get();
         }
         
         return false; // лимит превышен

@@ -85,13 +85,13 @@ public class CommandProcessor {
             response
         );
         
-        // Здесь нужно отправить сообщение обратно в MessageBroker
-        // Пока просто выводим в консоль
-        System.out.println("[Бот -> " + user + "]: " + response);
-        
-        // Для тестирования: эмулируем отправку в чат
-        // В реальной системе нужно использовать messageBroker
-        messageBroker.processIncomingMessage(botResponse);
+        // Отправляем ответ пользователю через MessageBroker
+        try {
+            messageBroker.getOutgoingQueue().put(botResponse);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            Logger.error("CommandProcessor", "Прервано прерыванием при отправке ответа на команду", e);
+        }
     }
     
     private String handleStatsCommand(String requestingUser, String args) {
@@ -137,14 +137,16 @@ public class CommandProcessor {
         StringBuilder response = new StringBuilder();
         response.append("🔥 Топ-10 популярных слов:\n");
         
+        StringBuilder responseWithRanks = new StringBuilder(response);
+        int[] rank = {1};
         wordFreq.entrySet().stream()
             .sorted((e1, e2) -> Integer.compare(e2.getValue(), e1.getValue()))
             .limit(10)
             .forEach(entry -> {
-                response.append(String.format("  %d. \"%s\" - %d раз\n",
-                    response.toString().split("\n").length,
-                    entry.getKey(), entry.getValue()));
+                responseWithRanks.append(String.format("  %d. \"%s\" - %d раз\n",
+                    rank[0]++, entry.getKey(), entry.getValue()));
             });
+        response = responseWithRanks;
         
         return response.toString();
     }

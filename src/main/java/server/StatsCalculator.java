@@ -1,14 +1,16 @@
 package server;
 
-import common.ChatMessage;
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import common.ChatMessage;
 
 public class StatsCalculator {
     // Основные счетчики
@@ -125,9 +127,25 @@ public class StatsCalculator {
     
     public void cleanupInactiveUsers() {
         long inactiveThreshold = System.currentTimeMillis() - (15 * 60 * 1000); // 15 минут
-        lastActivityTime.entrySet().removeIf(entry -> 
-            entry.getValue() < inactiveThreshold && 
+        lastActivityTime.entrySet().removeIf(entry ->
+            entry.getValue() < inactiveThreshold &&
             !userMessageCount.containsKey(entry.getKey())
         );
+        
+        // Также очищаем данные пользователей, которые давно не были активны
+        Set<String> usersToRemove = new HashSet<>();
+        userMessageCount.forEach((user, count) -> {
+            Long lastActivity = lastActivityTime.get(user);
+            if (lastActivity != null && lastActivity < inactiveThreshold) {
+                usersToRemove.add(user);
+            }
+        });
+        
+        for (String user : usersToRemove) {
+            userMessageCount.remove(user);
+            userWordCount.remove(user);
+            userUniqueWords.remove(user);
+            lastActivityTime.remove(user);
+        }
     }
 }
