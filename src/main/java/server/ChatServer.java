@@ -50,6 +50,7 @@ public class ChatServer {
     // Регистрация клиента после успешной аутентификации
     public void registerClient(String username, ClientHandler handler) {
         connectedClients.put(username, handler);
+        messageBroker.addClient(username);
         broadcastSystemMessage(username + " присоединился к чату.");
         Logger.info("Зарегистрирован пользователь: " + username + ", активных пользователей: " + connectedClients.size());
     }
@@ -57,6 +58,7 @@ public class ChatServer {
     // Удаление клиента
     public void removeClient(String username) {
         if (connectedClients.remove(username) != null) {
+            messageBroker.removeClient(username);
             broadcastSystemMessage(username + " покинул чат.");
             Logger.info("Пользователь отключен: " + username + ", активных пользователей: " + connectedClients.size());
         }
