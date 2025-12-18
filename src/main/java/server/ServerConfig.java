@@ -89,4 +89,8 @@ public class ServerConfig {
     public boolean isCommandProcessorEnabled() {
         return Boolean.parseBoolean(properties.getProperty("server.command.processor.enabled", "true"));
     }
+    
+    public String getLogLevel() {
+        return properties.getProperty("server.logging.level", "INFO");
+    }
 }

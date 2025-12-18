@@ -28,7 +28,7 @@ public class AnalyticsBot {
         new Thread(this::processMessages, "AnalyticsBot-Processor").start();
         
         // Периодическая генерация отчетов (каждую минуту)
-        scheduler.scheduleAtFixedRate(this::generatePeriodicReport, 1, 1, TimeUnit.MINUTES);
+        scheduler.scheduleAtFixedRate(this::generatePeriodicReport, 1, ServerConfig.getInstance().getReportIntervalMinutes(), TimeUnit.MINUTES);
         
         // Ежесекундное обновление активности (для определения "онлайн" статуса)
         scheduler.scheduleAtFixedRate(statsCalculator::cleanupInactiveUsers, 5, 5, TimeUnit.MINUTES);

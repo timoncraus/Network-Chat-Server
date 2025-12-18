@@ -29,9 +29,10 @@ public class ClientHandler implements Runnable {
 
     @Override
     public void run() {
-        try {
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+        try (BufferedReader inputReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+             PrintWriter outputWriter = new PrintWriter(socket.getOutputStream(), true)) {
+            in = inputReader;
+            out = outputWriter;
 
             // Этап 1: Регистрация (запрос имени пользователя)
             out.println("Введите ваше имя:");
@@ -109,12 +110,30 @@ public class ClientHandler implements Runnable {
         if (!isConnected) return;
         
         isConnected = false;
+        
+        // Закрываем потоки
+        try {
+            if (in != null) {
+                in.close();
+            }
+        } catch (IOException e) {
+            Logger.error("ClientHandler", "Ошибка при закрытии входного потока: " + e.getMessage(), e);
+        }
+        
+        try {
+            if (out != null) {
+                out.close();
+            }
+        } catch (Exception e) {
+            Logger.error("ClientHandler", "Ошибка при закрытии выходного потока: " + e.getMessage(), e);
+        }
+        
         try {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
             }
         } catch (IOException e) {
-            Logger.error("Ошибка при закрытии сокета: " + e.getMessage());
+            Logger.error("ClientHandler", "Ошибка при закрытии сокета: " + e.getMessage(), e);
         }
         
         // Удаляем клиента из сервера
@@ -122,7 +141,7 @@ public class ClientHandler implements Runnable {
             server.removeClient(username);
         }
         
-        Logger.info("Клиент отключен: " + username);
+        Logger.info("ClientHandler", "Клиент отключен: " + username);
     }
 
     public String getUsername() {

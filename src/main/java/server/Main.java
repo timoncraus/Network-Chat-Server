@@ -7,6 +7,10 @@ public class Main {
     public static void main(String[] args) {
         try {
             ServerConfig config = ServerConfig.getInstance();
+            
+            // Установка уровня логирования из конфигурации
+            Logger.setLogLevel(Logger.LogLevel.valueOf(config.getLogLevel()));
+            
             Logger.info("=".repeat(50));
             Logger.info("Запуск " + config.getServerName());
             Logger.info("Порт: " + config.getPort() + ", Максимум клиентов: " + config.getMaxClients());

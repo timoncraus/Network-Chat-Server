@@ -4,7 +4,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import common.ChatMessage;
 
@@ -23,6 +25,9 @@ public class MessageBroker implements Runnable {
     // Пул потоков для обработки очередей
     private final ExecutorService executor;
     
+    // Планировщик для периодических задач
+    private final ScheduledExecutorService scheduler;
+    
     // Флаг работы
     private volatile boolean isRunning;
     
@@ -39,9 +44,10 @@ public class MessageBroker implements Runnable {
         
         this.clientManager = new ClientManager();
         this.executor = Executors.newFixedThreadPool(3); // 3 потока для обработки
+        this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.isRunning = true;
         
-        System.out.println("[MessageBroker] Инициализирован");
+        Logger.info("MessageBroker", "[MessageBroker] Инициализирован");
     }
     
     @Override
@@ -57,7 +63,6 @@ public class MessageBroker implements Runnable {
         new Thread(this::monitorQueues, "QueueMonitor").start();
         
         // Очистка неактивных клиентов каждые 30 секунд
-        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
         scheduler.scheduleAtFixedRate(() -> 
             clientManager.cleanupInactiveUsers(30000), 30, 30, TimeUnit.SECONDS);
         
@@ -72,7 +77,7 @@ public class MessageBroker implements Runnable {
      */
     public void processIncomingMessage(ChatMessage message) {
         if (!isRunning) {
-            System.err.println("[MessageBroker] Не принимаю сообщения, брокер остановлен");
+            Logger.warn("MessageBroker", "[MessageBroker] Не принимаю сообщения, брокер остановлен");
             return;
         }
         
@@ -85,18 +90,12 @@ public class MessageBroker implements Runnable {
             
             // Статистика
             if (messagesProcessed.incrementAndGet() % 100 == 0) {
-                System.out.printf("[MessageBroker] Обработано %d сообщений%n", 
-                    messagesProcessed.get());
+                Logger.info("MessageBroker", String.format("[MessageBroker] Обработано %d сообщений", messagesProcessed.get()));
             }
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-<<<<<<< HEAD
-            System.err.println("[MessageBroker] Прервано при добавлении сообщения: " + 
-                message.getText());
-=======
             Logger.error("MessageBroker", "Прервано прерыванием при добавлении сообщения в очередь", e);
->>>>>>> 9451f4f (Обновление README)
         }
     }
     
@@ -121,20 +120,6 @@ public class MessageBroker implements Runnable {
         return clientManager.getActiveUsers();
     }
     
-    /**
-     * Получить очередь для аналитики (для AnalyticsBot)
-     */
-    public BlockingQueue<ChatMessage> getAnalyticsQueue() {
-        return analyticsQueue;
-    }
-    
-    /**
-     * Получить очередь для исходящих сообщений
-     */
-    public BlockingQueue<ChatMessage> getOutgoingQueue() {
-        return outgoingQueue;
-    }
-    
     // ========== PRIVATE МЕТОДЫ ОБРАБОТКИ ==========
     
     /**
@@ -142,12 +127,12 @@ public class MessageBroker implements Runnable {
      * Берет сообщения из incomingQueue и распределяет по другим очередям
      */
     private void processIncomingMessages() {
-        System.out.println("[MessageBroker] Запущен поток маршрутизатора");
+        Logger.info("MessageBroker", "[MessageBroker] Запущен поток маршрутизатора");
         
         while (isRunning) {
             try {
                 ChatMessage message = incomingQueue.take();
-
+ 
                 // Маршрутизация по типу сообщения
                 switch (message.getType()) {
                     case USER_MESSAGE:
@@ -172,21 +157,20 @@ public class MessageBroker implements Runnable {
                         break;
                         
                     default:
-                        System.err.println("[Маршрутизатор] Неизвестный тип сообщения: " + 
-                            message.getType());
+                        Logger.warn("MessageBroker", "[Маршрутизатор] Неизвестный тип сообщения: " + message.getType());
                         break;
                 }
                 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                System.out.println("[Маршрутизатор] Поток прерван");
+                Logger.info("MessageBroker", "[Маршрутизатор] Поток прерван");
                 break;
             } catch (Exception e) {
                 Logger.error("MessageBroker", "Ошибка при маршрутизации сообщения: " + e.getMessage(), e);
             }
         }
         
-        System.out.println("[MessageBroker] Поток маршрутизатора остановлен");
+        Logger.info("MessageBroker", "[MessageBroker] Поток маршрутизатора остановлен");
     }
     
     /**
@@ -194,15 +178,14 @@ public class MessageBroker implements Runnable {
      * Берет сообщения из outgoingQueue и отправляет всем клиентам
      */
     private void processOutgoingMessages() {
-        System.out.println("[MessageBroker] Запущен поток отправителя");
+        Logger.info("MessageBroker", "[MessageBroker] Запущен поток отправителя");
         
         while (isRunning) {
             try {
                 ChatMessage message = outgoingQueue.take();
                 
                 // Логируем
-                System.out.printf("[Отправитель] Отправляю: [%s] %s%n",
-                    message.getType(), message.getUser());
+                Logger.debug("MessageBroker", String.format("[Отправитель] Отправляю: [%s] %s", message.getType(), message.getUser()));
                 
                 // Отправляем сообщение через сервер (broadcast)
                 server.broadcastMessage(message);
@@ -215,7 +198,7 @@ public class MessageBroker implements Runnable {
             }
         }
         
-        System.out.println("[MessageBroker] Поток отправителя остановлен");
+        Logger.info("MessageBroker", "[MessageBroker] Поток отправителя остановлен");
     }
     
     // Метод для получения статистики по очередям
@@ -242,63 +225,50 @@ public class MessageBroker implements Runnable {
 
     // Поток для аналитики (Consumer для analyticsQueue)
     private void processAnalyticsMessages() {
-<<<<<<< HEAD
-        while (isRunning) {
-            try {
-                ChatMessage message = analyticsQueue.take();
-                
-                // Здесь будет вызываться AnalyticsBot
-                // Пока просто логируем
-                Logger.info("MessageBroker", "[Analytics Queue] Получено сообщение для анализа: " + message);
-                
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            break;
-        }
-=======
         // В текущей архитектуре этот поток не нужен, так как AnalyticsBot сам извлекает сообщения из очереди
         // Оставляем пустой метод для совместимости
         Logger.info("MessageBroker", "Поток аналитики запущен (заглушка для совместимости)");
->>>>>>> 9451f4f (Обновление README)
     }
-    
-    System.out.println("[MessageBroker] Поток аналитики остановлен");
-}
     
     /**
      * Мониторинг очередей (отдельный поток)
      */
     private void monitorQueues() {
-        System.out.println("[MessageBroker] Запущен мониторинг очередей");
+        Logger.info("MessageBroker", "[MessageBroker] Запущен мониторинг очередей");
         
         while (isRunning) {
             try {
-                Thread.sleep(5000);
-                Logger.info("MessageBroker", String.format("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d",
+                Thread.sleep(50);
+                Logger.debug("MessageBroker", String.format("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d",
                     incomingQueue.size(), outgoingQueue.size(), analyticsQueue.size()));
             } catch (InterruptedException e) {
                 break;
             }
         }
         
-        System.out.println("[MessageBroker] Мониторинг остановлен");
+        Logger.info("MessageBroker", "[MessageBroker] Мониторинг остановлен");
     }
     
     /**
      * Graceful shutdown
      */
     public void shutdown() {
-        System.out.println("[MessageBroker] Остановка...");
+        Logger.info("MessageBroker", "[MessageBroker] Остановка...");
         isRunning = false;
         int analyticsSize = analyticsQueue.size();
-    if (analyticsSize > 0) {
-        System.out.println("[MessageBroker] Очищаем analytics очередь: " + analyticsSize + " сообщений");
-        analyticsQueue.clear();
-    }
+        if (analyticsSize > 0) {
+            Logger.info("MessageBroker", String.format("[MessageBroker] Очищаем analytics очередь: %d сообщений", analyticsSize));
+            analyticsQueue.clear();
+        }
+        // Останавливаем scheduler
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+        }
         // Останавливаем executor
         executor.shutdown();
         try {

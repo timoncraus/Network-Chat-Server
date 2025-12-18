@@ -10,22 +10,46 @@ public class Logger {
         DEBUG, INFO, WARN, ERROR
     }
     
+    private static LogLevel currentLogLevel = LogLevel.INFO;
+    
+    public static void setLogLevel(LogLevel level) {
+        currentLogLevel = level;
+    }
+    
+    public static LogLevel getLogLevel() {
+        return currentLogLevel;
+    }
+    
     public static void log(LogLevel level, String message) {
-        String timestamp = LocalDateTime.now().format(formatter);
-        String threadName = Thread.currentThread().getName();
-        System.out.printf("[%s] [%s] %s: %s%n", timestamp, threadName, level, message);
+        if (level.compareTo(currentLogLevel) >= 0) {
+            String timestamp = LocalDateTime.now().format(formatter);
+            String threadName = Thread.currentThread().getName();
+            System.out.printf("[%s] [%s] %s: %s%n", timestamp, threadName, level, message);
+        }
     }
     
     public static void debug(String message) {
         log(LogLevel.DEBUG, message);
     }
     
+    public static void debug(String context, String message) {
+        log(LogLevel.DEBUG, String.format("[%s] %s", context, message));
+    }
+    
     public static void info(String message) {
         log(LogLevel.INFO, message);
     }
     
+    public static void info(String context, String message) {
+        log(LogLevel.INFO, String.format("[%s] %s", context, message));
+    }
+    
     public static void warn(String message) {
         log(LogLevel.WARN, message);
+    }
+    
+    public static void warn(String context, String message) {
+        log(LogLevel.WARN, String.format("[%s] %s", context, message));
     }
     
     public static void warn(String message, Throwable throwable) {
@@ -44,7 +68,6 @@ public class Logger {
         throwable.printStackTrace();
     }
     
-    // Улучшенные методы логирования с контекстом
     public static void error(String context, String message) {
         log(LogLevel.ERROR, String.format("[%s] %s", context, message));
     }
@@ -54,13 +77,5 @@ public class Logger {
         if (throwable != null) {
             throwable.printStackTrace();
         }
-    }
-    
-    public static void warn(String context, String message) {
-        log(LogLevel.WARN, String.format("[%s] %s", context, message));
-    }
-    
-    public static void info(String context, String message) {
-        log(LogLevel.INFO, String.format("[%s] %s", context, message));
     }
 }
