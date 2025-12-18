@@ -12,7 +12,8 @@ public class Logger {
     
     public static void log(LogLevel level, String message) {
         String timestamp = LocalDateTime.now().format(formatter);
-        System.out.printf("[%s] %s: %s%n", timestamp, level, message);
+        String threadName = Thread.currentThread().getName();
+        System.out.printf("[%s] [%s] %s: %s%n", timestamp, threadName, level, message);
     }
     
     public static void debug(String message) {
@@ -41,5 +42,25 @@ public class Logger {
     public static void error(String message, Throwable throwable) {
         log(LogLevel.ERROR, message + " - " + throwable.getMessage());
         throwable.printStackTrace();
+    }
+    
+    // Улучшенные методы логирования с контекстом
+    public static void error(String context, String message) {
+        log(LogLevel.ERROR, String.format("[%s] %s", context, message));
+    }
+    
+    public static void error(String context, String message, Throwable throwable) {
+        log(LogLevel.ERROR, String.format("[%s] %s - %s", context, message, throwable.getMessage()));
+        if (throwable != null) {
+            throwable.printStackTrace();
+        }
+    }
+    
+    public static void warn(String context, String message) {
+        log(LogLevel.WARN, String.format("[%s] %s", context, message));
+    }
+    
+    public static void info(String context, String message) {
+        log(LogLevel.INFO, String.format("[%s] %s", context, message));
     }
 }

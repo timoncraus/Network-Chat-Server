@@ -29,7 +29,7 @@ public class MessageBroker implements Runnable {
 
     @Override
     public void run() {
-        Logger.info("MessageBroker запущен");
+        Logger.info("MessageBroker", "MessageBroker запущен");
         
         // Запускаем потоки-обработчики
         executor.execute(this::processIncomingMessages);
@@ -54,8 +54,7 @@ public class MessageBroker implements Runnable {
     private void processIncomingMessages() {
         while (isRunning) {
             try {
-                ChatMessage message = incomingQueue.poll(100, TimeUnit.MILLISECONDS);
-                if (message == null) continue;
+                ChatMessage message = incomingQueue.take();
 
                 // Маршрутизация по типу сообщения
                 switch (message.getType()) {
@@ -81,7 +80,7 @@ public class MessageBroker implements Runnable {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                System.err.println("Ошибка при маршрутизации сообщения: " + e.getMessage());
+                Logger.error("MessageBroker", "Ошибка при маршрутизации сообщения: " + e.getMessage(), e);
             }
         }
     }
@@ -90,14 +89,16 @@ public class MessageBroker implements Runnable {
     private void processOutgoingMessages() {
         while (isRunning) {
             try {
-                ChatMessage message = outgoingQueue.poll(100, TimeUnit.MILLISECONDS);
-                if (message == null) continue;
+                ChatMessage message = outgoingQueue.take();
                 
                 // Отправляем сообщение всем клиентам через сервер
                 server.broadcastMessage(message);
                 
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
-                System.err.println("Ошибка при отправке сообщения: " + e.getMessage());
+                Logger.error("MessageBroker", "Ошибка при отправке сообщения: " + e.getMessage(), e);
             }
         }
     }
@@ -128,12 +129,11 @@ public class MessageBroker implements Runnable {
     private void processAnalyticsMessages() {
         while (isRunning) {
             try {
-                ChatMessage message = analyticsQueue.poll(100, TimeUnit.MILLISECONDS);
-                if (message == null) continue;
+                ChatMessage message = analyticsQueue.take();
                 
                 // Здесь будет вызываться AnalyticsBot
                 // Пока просто логируем
-                Logger.info("[Analytics Queue] Получено сообщение для анализа: " + message);
+                Logger.info("MessageBroker", "[Analytics Queue] Получено сообщение для анализа: " + message);
                 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -147,7 +147,7 @@ public class MessageBroker implements Runnable {
         while (isRunning) {
             try {
                 Thread.sleep(5000);
-                Logger.info(String.format("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d",
+                Logger.info("MessageBroker", String.format("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d",
                     incomingQueue.size(), outgoingQueue.size(), analyticsQueue.size()));
             } catch (InterruptedException e) {
                 break;
@@ -178,7 +178,7 @@ public class MessageBroker implements Runnable {
         } catch (InterruptedException e) {
             executor.shutdownNow();
         }
-        Logger.info("MessageBroker остановлен");
+        Logger.info("MessageBroker", "MessageBroker остановлен");
     }
     
     // Геттеры для доступа к очередям из других компонентов

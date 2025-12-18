@@ -22,7 +22,7 @@ public class AnalyticsBot {
     }
 
     public void start() {
-        Logger.info("AnalyticsBot запущен");
+        Logger.info("AnalyticsBot", "AnalyticsBot запущен");
         
         // Поток для обработки сообщений из очереди
         new Thread(this::processMessages, "AnalyticsBot-Processor").start();
@@ -52,7 +52,7 @@ public class AnalyticsBot {
                         break;
                         
                     default:
-                        Logger.warn("Получено сообщение неизвестного типа: " + message.getType());
+                        Logger.warn("AnalyticsBot", "Получено сообщение неизвестного типа: " + message.getType());
                         break;
                 }
                 
@@ -60,7 +60,7 @@ public class AnalyticsBot {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                Logger.error("Ошибка при обработке сообщения в AnalyticsBot", e);
+                Logger.error("AnalyticsBot", "Ошибка при обработке сообщения в AnalyticsBot", e);
             }
         }
     }

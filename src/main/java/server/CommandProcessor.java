@@ -14,13 +14,37 @@ public class CommandProcessor {
     }
 
     public void processCommand(ChatMessage message) {
+        // Валидация входных данных
+        if (message == null || message.getText() == null || message.getUser() == null) {
+            Logger.error("CommandProcessor", "Получено некорректное сообщение: " + message);
+            return;
+        }
+        
         String text = message.getText();
         String user = message.getUser();
+        
+        // Проверка, начинается ли сообщение с команды
+        if (!text.startsWith("/")) {
+            Logger.warn("CommandProcessor", "Получено сообщение без слеша: " + text);
+            return;
+        }
         
         // Убираем слеш и разбиваем на команду и аргументы
         String[] parts = text.substring(1).split("\\s+", 2);
         String command = parts[0].toLowerCase();
         String args = parts.length > 1 ? parts[1] : "";
+        
+        // Валидация команды
+        if (command.isEmpty()) {
+            Logger.warn("CommandProcessor", "Получена пустая команда от пользователя " + user);
+            return;
+        }
+        
+        // Проверка длины аргументов
+        if (args.length() > 1000) {
+            Logger.warn("CommandProcessor", "Слишком длинные аргументы в команде от пользователя " + user + ", длина: " + args.length());
+            return;
+        }
         
         String response;
         
