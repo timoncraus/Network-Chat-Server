@@ -1,3 +1,5 @@
+package server;
+
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.util.concurrent.Executors;
@@ -18,13 +20,13 @@ public class PerformanceMonitor {
     }
     
     public void start() {
-        System.out.println("PerformanceMonitor запущен");
+        Logger.info("PerformanceMonitor", "PerformanceMonitor запущен");
         
         scheduler.scheduleAtFixedRate(() -> {
             try {
                 printMetrics();
             } catch (Exception e) {
-                System.err.println("Ошибка в PerformanceMonitor: " + e.getMessage());
+                Logger.error("PerformanceMonitor", "Ошибка в PerformanceMonitor: " + e.getMessage(), e);
             }
         }, 5, 5, TimeUnit.SECONDS);
     }
@@ -33,32 +35,41 @@ public class PerformanceMonitor {
         MemoryMXBean memoryBean = ManagementFactory.getMemoryMXBean();
         long uptime = System.currentTimeMillis() - startTime;
         
-        System.out.println("\n" + "=".repeat(60));
-        System.out.println("МОНИТОРИНГ ПРОИЗВОДИТЕЛЬНОСТИ");
-        System.out.println("=".repeat(60));
+        Logger.info("PerformanceMonitor", "=".repeat(60));
+        Logger.info("PerformanceMonitor", "МОНИТОРИНГ ПРОИЗВОДИТЕЛЬНОСТИ");
+        Logger.info("PerformanceMonitor", "=".repeat(60));
         
-        System.out.printf("Время работы: %s%n", formatUptime(uptime));
+        Logger.info("PerformanceMonitor", String.format("Время работы: %s", formatUptime(uptime)));
         
-        // Активные подключения (нужен геттер в ChatServer)
-        // System.out.printf("Активные подключения: %d%n", server.getActiveConnections());
+        // Активные подключения
+        Logger.info("PerformanceMonitor", String.format("Активные подключения: %d", server.getActiveUserCount()));
         
         // Использование памяти
         long usedMemory = memoryBean.getHeapMemoryUsage().getUsed() / (1024 * 1024);
         long maxMemory = memoryBean.getHeapMemoryUsage().getMax() / (1024 * 1024);
-        System.out.printf("Память: %dMB / %dMB (%.1f%%)%n", 
-            usedMemory, maxMemory, (usedMemory * 100.0 / maxMemory));
+        Logger.info("PerformanceMonitor", String.format("Память: %dMB / %dMB (%.1f%%)",
+            usedMemory, maxMemory, (usedMemory * 100.0 / maxMemory)));
         
         // Статистика потоков
         ThreadGroup rootGroup = Thread.currentThread().getThreadGroup();
         while (rootGroup.getParent() != null) {
             rootGroup = rootGroup.getParent();
         }
-        System.out.printf("Активные потоки: %d%n", rootGroup.activeCount());
+        Logger.info("PerformanceMonitor", String.format("Активные потоки: %d", rootGroup.activeCount()));
         
         // Загрузка CPU
-        System.out.printf("Загрузка CPU: %.1f%%%n", getProcessCpuLoad());
+        Logger.info("PerformanceMonitor", String.format("Загрузка CPU: %.1f%%", getProcessCpuLoad()));
         
-        System.out.println("=".repeat(60));
+        // Статистика MessageBroker
+        if (messageBroker != null) {
+            Logger.info("PerformanceMonitor", String.format("Очередь входящих: %d", messageBroker.getIncomingQueue().size()));
+            Logger.info("PerformanceMonitor", String.format("Очередь исходящих: %d", messageBroker.getOutgoingQueue().size()));
+            Logger.info("PerformanceMonitor", String.format("Очередь аналитики: %d", messageBroker.getAnalyticsQueue().size()));
+        } else {
+            Logger.warn("PerformanceMonitor", "MessageBroker недоступен для мониторинга");
+        }
+        
+        Logger.info("PerformanceMonitor", "=".repeat(60));
     }
     
     private String formatUptime(long millis) {

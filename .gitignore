@@ -19,14 +19,14 @@ out/
 
 # Maven-specific
 # Uncomment if you want to ignore maven-wrapper files
-# .mvn/wrapper/maven-wrapper.jar
-# !.mvn/wrapper/maven-wrapper.properties
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
 
 # Gradle-specific
 .gradle/
 # Uncomment if you want to ignore gradle-wrapper files
-# gradle/wrapper/gradle-wrapper.jar
-# !gradle/wrapper/gradle-wrapper.properties
+gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
 
 # Log and temporary files
 *.log
@@ -40,9 +40,33 @@ out/
 # Package Files #
 #
 # comment the following line if you want to commit packaged JAR files.
-# *.jar
+*.jar
 *.war
 *.ear
 
 # Misc
 hs_err_pid*.log
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Maven additional files
+log/
+logs/
+*.out
+
+# Test directories
+test/
+tests/
+**/test/
+**/tests/
+
+# Documentation directories
+doc/
+docs/
+**/doc/
+**/docs/
+
+# Generated documentation
+apidocs/

@@ -1,8 +1,12 @@
 package server;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+
 import common.ChatMessage;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong; 
 
 public class MessageBroker implements Runnable {
     // Ссылка на сервер (для broadcast)
@@ -42,7 +46,7 @@ public class MessageBroker implements Runnable {
     
     @Override
     public void run() {
-        System.out.println("[MessageBroker] Запуск MessageBroker...");
+        Logger.info("MessageBroker", "MessageBroker запущен");
         
         // Запускаем потоки-обработчики
         executor.execute(this::processIncomingMessages);   // Поток 1: Маршрутизатор
@@ -138,16 +142,8 @@ public class MessageBroker implements Runnable {
         
         while (isRunning) {
             try {
-                // Ждем сообщение не более 100мс
-                ChatMessage message = incomingQueue.poll(100, TimeUnit.MILLISECONDS);
-                if (message == null) continue;
-                
-                // Логируем для отладки
-                System.out.printf("[Маршрутизатор] Получено: [%s] %s: %s%n",
-                    message.getType(), message.getUser(), 
-                    message.getText().length() > 30 ? 
-                    message.getText().substring(0, 30) + "..." : message.getText());
-                
+                ChatMessage message = incomingQueue.take();
+
                 // Маршрутизация по типу сообщения
                 switch (message.getType()) {
                     case USER_MESSAGE:
@@ -182,8 +178,7 @@ public class MessageBroker implements Runnable {
                 System.out.println("[Маршрутизатор] Поток прерван");
                 break;
             } catch (Exception e) {
-                System.err.println("[Маршрутизатор] Ошибка: " + e.getMessage());
-                e.printStackTrace();
+                Logger.error("MessageBroker", "Ошибка при маршрутизации сообщения: " + e.getMessage(), e);
             }
         }
         
@@ -199,9 +194,7 @@ public class MessageBroker implements Runnable {
         
         while (isRunning) {
             try {
-                // Ждем сообщение
-                ChatMessage message = outgoingQueue.poll(100, TimeUnit.MILLISECONDS);
-                if (message == null) continue;
+                ChatMessage message = outgoingQueue.take();
                 
                 // Логируем
                 System.out.printf("[Отправитель] Отправляю: [%s] %s%n",
@@ -212,32 +205,50 @@ public class MessageBroker implements Runnable {
                 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                System.out.println("[Отправитель] Поток прерван");
                 break;
             } catch (Exception e) {
-                System.err.println("[Отправитель] Ошибка при отправке: " + e.getMessage());
+                Logger.error("MessageBroker", "Ошибка при отправке сообщения: " + e.getMessage(), e);
             }
         }
         
         System.out.println("[MessageBroker] Поток отправителя остановлен");
     }
     
-    /**
-     * Поток 3: ДЛЯ АНАЛИТИКИ
-     * Просто передает сообщения в analyticsQueue (бот заберет сам)
-     */
-    // В методе processAnalyticsMessages замените sleep на обработку:
-private void processAnalyticsMessages() {
-    System.out.println("[MessageBroker] Запущен поток для аналитики");
+    // Метод для получения статистики по очередям
+    public QueueStats getQueueStats() {
+        return new QueueStats(
+            incomingQueue.size(),
+            outgoingQueue.size(),
+            analyticsQueue.size()
+        );
+    }
     
-    while (isRunning) {
-        try {
-            // Вместо Thread.sleep(1000) добавьте:
-            ChatMessage message = analyticsQueue.poll(100, TimeUnit.MILLISECONDS);
-            if (message != null) {
-                // Здесь будет обработка ботом
+    // Класс для статистики по очередям
+    public static class QueueStats {
+        public final int incomingSize;
+        public final int outgoingSize;
+        public final int analyticsSize;
+        
+        public QueueStats(int incomingSize, int outgoingSize, int analyticsSize) {
+            this.incomingSize = incomingSize;
+            this.outgoingSize = outgoingSize;
+            this.analyticsSize = analyticsSize;
+        }
+    }
+
+    // Поток для аналитики (Consumer для analyticsQueue)
+    private void processAnalyticsMessages() {
+        while (isRunning) {
+            try {
+                ChatMessage message = analyticsQueue.take();
+                
+                // Здесь будет вызываться AnalyticsBot
                 // Пока просто логируем
-                System.out.println("[Analytics] Получено: " + message.getUser());
+                Logger.info("MessageBroker", "[Analytics Queue] Получено сообщение для анализа: " + message);
+                
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -256,17 +267,9 @@ private void processAnalyticsMessages() {
         
         while (isRunning) {
             try {
-                Thread.sleep(5000); // Каждые 5 секунд
-                
-                System.out.printf("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d | Клиенты: %d%n",
-                    incomingQueue.size(), outgoingQueue.size(), analyticsQueue.size(),
-                    clientManager.getActiveCount());
-                
-                // Предупреждение, если очередь переполняется
-                if (incomingQueue.size() > 800) {
-                    System.err.println("[Мониторинг] ⚠️  Входящая очередь почти полна!");
-                }
-                
+                Thread.sleep(5000);
+                Logger.info("MessageBroker", String.format("[Мониторинг] Очереди: входящая=%d, исходящая=%d, аналитика=%d",
+                    incomingQueue.size(), outgoingQueue.size(), analyticsQueue.size()));
             } catch (InterruptedException e) {
                 break;
             }
@@ -295,56 +298,19 @@ private void processAnalyticsMessages() {
         } catch (InterruptedException e) {
             executor.shutdownNow();
         }
-        
-        // Очищаем очереди
-        incomingQueue.clear();
-        outgoingQueue.clear();
-        analyticsQueue.clear();
-        
-        System.out.println("[MessageBroker] Остановлен. Обработано сообщений: " + 
-            messagesProcessed.get());
+        Logger.info("MessageBroker", "MessageBroker остановлен");
     }
     
-    // ========== ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ==========
-    
-    /**
-     * Отправить приватное сообщение (доп. функция)
-     */
-    public boolean sendPrivateMessage(String fromUser, String toUser, String text) {
-        if (!clientManager.isUserActive(toUser)) {
-            return false;
-        }
-        
-        ChatMessage privateMsg = new ChatMessage(
-            ChatMessage.MessageType.USER_MESSAGE,
-            fromUser,
-            "[Приватно для " + toUser + "] " + text
-        );
-        
-        // Здесь нужно было бы найти конкретного клиента и отправить ему
-        // Пока просто отправляем в общую очередь
-        try {
-            outgoingQueue.put(privateMsg);
-            return true;
-        } catch (InterruptedException e) {
-            return false;
-        }
+    // Геттеры для доступа к очередям из других компонентов
+    public BlockingQueue<ChatMessage> getIncomingQueue() {
+        return incomingQueue;
     }
     
-    /**
-     * Получить статистику брокера (для мониторинга)
-     */
-    public String getBrokerStats() {
-        return String.format(
-            "MessageBroker статистика:%n" +
-            "  Обработано сообщений: %d%n" +
-            "  Активных клиентов: %d%n" +
-            "  Размеры очередей: входящая=%d, исходящая=%d, аналитика=%d%n" +
-            "  Статус: %s",
-            messagesProcessed.get(),
-            clientManager.getActiveCount(),
-            incomingQueue.size(), outgoingQueue.size(), analyticsQueue.size(),
-            isRunning ? "РАБОТАЕТ" : "ОСТАНОВЛЕН"
-        );
+    public BlockingQueue<ChatMessage> getOutgoingQueue() {
+        return outgoingQueue;
+    }
+    
+    public BlockingQueue<ChatMessage> getAnalyticsQueue() {
+        return analyticsQueue;
     }
 }

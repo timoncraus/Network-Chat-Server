@@ -1,3 +1,5 @@
+package server;
+
 import common.ChatMessage;
 import java.time.Instant;
 import java.time.LocalDateTime;

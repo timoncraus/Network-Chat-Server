@@ -1,11 +1,19 @@
-import common.ChatMessage;
+package server;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentHashMap;
+
+import common.ChatMessage;
 
 public class ClientHandler implements Runnable {
+    private static final int MAX_MESSAGE_LENGTH = 1000; // Максимальная длина сообщения
+    private static final int MESSAGE_LIMIT_PER_MINUTE = 60; // Максимальное количество сообщений в минуту
+    private static final ConcurrentHashMap<String, UserRateLimiter> rateLimiters = new ConcurrentHashMap<>();
+    
     private Socket socket;
     private ChatServer server;
     private PrintWriter out;
@@ -47,9 +55,24 @@ public class ClientHandler implements Runnable {
             while (isConnected && (inputLine = in.readLine()) != null) {
                 if (inputLine.trim().isEmpty()) continue;
                 
+                // Проверка длины сообщения
+                if (inputLine.length() > MAX_MESSAGE_LENGTH) {
+                    out.println("Сообщение слишком длинное. Максимальная длина: " + MAX_MESSAGE_LENGTH + " символов.");
+                    continue;
+                }
+                
+                // Проверка рейт-лимита
+                UserRateLimiter limiter = rateLimiters.computeIfAbsent(username,
+                    k -> new UserRateLimiter(MESSAGE_LIMIT_PER_MINUTE));
+                
+                if (!limiter.allowRequest()) {
+                    out.println("Превышен лимит сообщений в минуту (" + MESSAGE_LIMIT_PER_MINUTE + "). Попробуйте позже.");
+                    continue;
+                }
+                
                 // Создаем сообщение
-                ChatMessage.MessageType type = inputLine.startsWith("/") 
-                    ? ChatMessage.MessageType.COMMAND 
+                ChatMessage.MessageType type = inputLine.startsWith("/")
+                    ? ChatMessage.MessageType.COMMAND
                     : ChatMessage.MessageType.USER_MESSAGE;
                 
                 ChatMessage message = new ChatMessage(type, username, inputLine);
@@ -58,7 +81,9 @@ public class ClientHandler implements Runnable {
                 server.getMessageBroker().processIncomingMessage(message);
             }
         } catch (IOException e) {
-            System.err.println("Ошибка в обработчике клиента " + username + ": " + e.getMessage());
+            Logger.error("ClientHandler", "Ошибка ввода-вывода в обработчике клиента " + username + ": " + e.getMessage(), e);
+        } catch (Exception e) {
+            Logger.error("ClientHandler", "Неожиданная ошибка в обработчике клиента " + username, e);
         } finally {
             disconnect();
         }
@@ -89,7 +114,7 @@ public class ClientHandler implements Runnable {
                 socket.close();
             }
         } catch (IOException e) {
-            System.err.println("Ошибка при закрытии сокета: " + e.getMessage());
+            Logger.error("Ошибка при закрытии сокета: " + e.getMessage());
         }
         
         // Удаляем клиента из сервера
@@ -97,7 +122,7 @@ public class ClientHandler implements Runnable {
             server.removeClient(username);
         }
         
-        System.out.println("Клиент отключен: " + username);
+        Logger.info("Клиент отключен: " + username);
     }
 
     public String getUsername() {
