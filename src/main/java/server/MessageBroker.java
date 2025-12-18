@@ -91,8 +91,12 @@ public class MessageBroker implements Runnable {
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+<<<<<<< HEAD
             System.err.println("[MessageBroker] Прервано при добавлении сообщения: " + 
                 message.getText());
+=======
+            Logger.error("MessageBroker", "Прервано прерыванием при добавлении сообщения в очередь", e);
+>>>>>>> 9451f4f (Обновление README)
         }
     }
     
@@ -238,6 +242,7 @@ public class MessageBroker implements Runnable {
 
     // Поток для аналитики (Consumer для analyticsQueue)
     private void processAnalyticsMessages() {
+<<<<<<< HEAD
         while (isRunning) {
             try {
                 ChatMessage message = analyticsQueue.take();
@@ -254,6 +259,11 @@ public class MessageBroker implements Runnable {
             Thread.currentThread().interrupt();
             break;
         }
+=======
+        // В текущей архитектуре этот поток не нужен, так как AnalyticsBot сам извлекает сообщения из очереди
+        // Оставляем пустой метод для совместимости
+        Logger.info("MessageBroker", "Поток аналитики запущен (заглушка для совместимости)");
+>>>>>>> 9451f4f (Обновление README)
     }
     
     System.out.println("[MessageBroker] Поток аналитики остановлен");

@@ -77,9 +77,10 @@ public class AnalyticsBot {
         
         // Отправляем отчет в чат через MessageBroker
         try {
-            messageBroker.getOutgoingQueue().put(reportMessage); // Нужен геттер
+            messageBroker.getOutgoingQueue().put(reportMessage);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            Logger.error("AnalyticsBot", "Прервано прерыванием при отправке отчета", e);
         }
     }
 
